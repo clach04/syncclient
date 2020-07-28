@@ -2,6 +2,7 @@ from hashlib import sha256
 from binascii import hexlify
 from base64 import b64decode
 import json
+import os
 import six
 import sys
 
@@ -63,6 +64,9 @@ def get_browserid_assertion(login, password, fxa_server_url=FXA_SERVER_URL,
     state.
     """
     session = FxAConnection(login, password, fxa_server_url = fxa_server_url)
+    # TODO move below into FxAConnection()?
+    if os.environ.get('SYNCCLIENT_PAUSE') != 'SKIP':
+        input('waiting for 2fa, press return/enter once complete (check email). To skip set environment variable SYNCCLIENT_PAUSE=SKIP: ')
     bid_assertion = session.get_identity_assertion(tokenserver_url)
     _, keyB = session.fetch_keys()
     if isinstance(keyB, six.text_type):  # pragma: no cover
