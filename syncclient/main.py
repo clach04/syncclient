@@ -27,8 +27,8 @@ def main():
     result = getattr(client, args.action)(*extra)
     if isinstance(result, list):
         for item in result:
-            item['payload'] = json.dumps(decrypt_data(encryption_key, item['payload']))
-    pprint(result)
+            item['payload'] = decrypt_data(encryption_key, item['payload'])
+    print(json.dumps(result, indent=4))
 
 if __name__ == '__main__':
     main()
