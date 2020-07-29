@@ -3,13 +3,15 @@ from binascii import hexlify
 from base64 import b64decode
 import json
 import os
+import pickle
 import six
 import sys
 
 import requests
 from requests_hawk import HawkAuth
 from fxa.core import Client as FxAClient
-from fxa.crypto import derive_key
+from fxa.core import Session as FxASession
+from fxa.crypto import derive_key, quick_stretch_password
 from crypto import AESCipher, KeyBundle
 
 # This is a proof of concept, in python, to get some data of some collections.
@@ -33,7 +35,7 @@ def encode_header(value):
 
 
 class FxAConnection(object):
-    def __new__(cls, login=None, password=None, fxa_server_url=FXA_SERVER_URL):
+    def __new__(cls, login=None, password=None, fxa_server_url=FXA_SERVER_URL, session_filename='session.pickle'):
         # initial connection or server changed
         if not cls._client or cls._fxa_server_url != fxa_server_url:
             if not (login and password):
@@ -42,6 +44,14 @@ class FxAConnection(object):
             cls._fxa_server_url = fxa_server_url
             cls._client = FxAClient(server_url = fxa_server_url)
             cls._session = None
+            if os.path.exists(session_filename):
+                previous_session = pickle.load(open(session_filename, 'rb'))
+                cls._session = FxASession(cls._client, login,
+                                            quick_stretch_password(login, password), previous_session.uid,
+                                            previous_session.token)
+                cls._session.keys = previous_session.keys
+                cls._session.check_session_status()
+                print('used pickle WARNING this code works in that get results BUT still getting email warning about new login/device')
         # initial login or re-login
         if not cls._session or (login and password):
             if not (login and password):
@@ -49,6 +59,8 @@ class FxAConnection(object):
                 raise TypeError("FxAConnection require both login and password arguments")
             # initial login
             cls._session = cls._client.login(login, password, keys = True)
+            cls._session.fetch_keys()
+            pickle.dump(cls._session, open(session_filename, 'wb'))
         elif login or password:
             raise TypeError("FxAConnection takes both login and password arguments, not login or password only")
         return cls._session
@@ -68,7 +80,8 @@ def get_browserid_assertion(login, password, fxa_server_url=FXA_SERVER_URL,
     if os.environ.get('SYNCCLIENT_PAUSE') != 'SKIP':
         input('waiting for 2fa, press return/enter once complete (check email). To skip set environment variable SYNCCLIENT_PAUSE=SKIP: ')
     bid_assertion = session.get_identity_assertion(tokenserver_url)
-    _, keyB = session.fetch_keys()
+    #_, keyB = session.fetch_keys()
+    _, keyB = session.keys
     if isinstance(keyB, six.text_type):  # pragma: no cover
         keyB = keyB.encode('utf-8')
     return bid_assertion, hexlify(sha256(keyB).digest()[0:16])
@@ -76,7 +89,7 @@ def get_browserid_assertion(login, password, fxa_server_url=FXA_SERVER_URL,
 
 def __get_sync_key(login, password):
     session = FxAConnection(login, password)
-    _, keyB = session.fetch_keys()
+    _, keyB = session.keys  # assume fetch_keys() previously called
     return keyB
 
 
