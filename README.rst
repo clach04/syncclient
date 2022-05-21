@@ -1,6 +1,7 @@
 Python Firefox Sync client
 ##########################
 
+Old fork of https://github.com/eNote-GmbH/syncclient that auto decrypts, but it doesn't handle login well. Instead now see https://github.com/clach04/firefox_syncclient/tree/enote_docs
 
 This is a python client for Firefox Sync. Check it out with::
 
